@@ -53,6 +53,7 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
       <Stack.Screen name="auth" options={{ animation: "none" }} />
+      <Stack.Screen name="forgot-password" />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen

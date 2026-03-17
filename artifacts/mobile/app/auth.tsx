@@ -191,6 +191,15 @@ export default function AuthScreen() {
             />
           )}
 
+          {mode === "login" && (
+            <Pressable
+              style={styles.forgotRow}
+              onPress={() => router.push("/forgot-password")}
+            >
+              <Text style={styles.forgotText}>Forgot your password?</Text>
+            </Pressable>
+          )}
+
           {apiError ? (
             <View style={styles.errorBanner}>
               <Feather name="alert-circle" size={15} color={Colors.red} />
@@ -448,6 +457,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: Colors.white,
+  },
+  forgotRow: {
+    alignSelf: "flex-end",
+    marginTop: 6,
+    marginBottom: 2,
+    padding: 4,
+  },
+  forgotText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontFamily: "Inter_600SemiBold",
+    textDecorationLine: "underline",
   },
   switchRow: {
     flexDirection: "row",

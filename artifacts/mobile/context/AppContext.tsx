@@ -76,6 +76,8 @@ interface AppContextValue {
   signUp: (email: string, name: string, password: string) => Promise<void>;
   logIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
+  findAccountByEmail: (email: string) => Promise<AuthUser | null>;
+  resetPassword: (email: string, newPassword: string) => Promise<void>;
 
   // Profile
   profile: UserProfile | null;
@@ -291,6 +293,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await loadUserData(found.id);
   }, [loadUserData]);
 
+  const findAccountByEmail = useCallback(async (email: string): Promise<AuthUser | null> => {
+    const usersRaw = await AsyncStorage.getItem(STORAGE_KEYS.users);
+    const users: StoredUser[] = usersRaw ? JSON.parse(usersRaw) : [];
+    const found = users.find((u) => u.email === email.toLowerCase().trim());
+    if (!found) return null;
+    return { id: found.id, email: found.email, name: found.name, createdAt: found.createdAt };
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, newPassword: string) => {
+    const usersRaw = await AsyncStorage.getItem(STORAGE_KEYS.users);
+    const users: StoredUser[] = usersRaw ? JSON.parse(usersRaw) : [];
+    const idx = users.findIndex((u) => u.email === email.toLowerCase().trim());
+    if (idx === -1) throw new Error("Account not found");
+    users[idx] = { ...users[idx], passwordHash: simpleHash(newPassword) };
+    await AsyncStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
+  }, []);
+
   const logOut = useCallback(async () => {
     await AsyncStorage.removeItem(STORAGE_KEYS.session);
     setAuthUser(null);
@@ -497,7 +516,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppContextValue>(
     () => ({
-      authUser, isAuthLoaded, signUp, logIn, logOut,
+      authUser, isAuthLoaded, signUp, logIn, logOut, findAccountByEmail, resetPassword,
       profile, setProfile,
       products, sales, currency, setCurrency,
       achievements, newlyUnlocked, clearNewlyUnlocked,
@@ -507,7 +526,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getStockValue, getLast14Days, getTopProducts, getLowStockProducts,
     }),
     [
-      authUser, isAuthLoaded, signUp, logIn, logOut,
+      authUser, isAuthLoaded, signUp, logIn, logOut, findAccountByEmail, resetPassword,
       profile, setProfile, products, sales, currency, setCurrency,
       achievements, newlyUnlocked, clearNewlyUnlocked,
       addProduct, updateProduct, deleteProduct, quickAddStock,
