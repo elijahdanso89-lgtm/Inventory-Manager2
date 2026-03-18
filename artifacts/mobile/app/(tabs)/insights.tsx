@@ -13,12 +13,33 @@ import { Colors } from "@/constants/colors";
 import { Achievement, useApp } from "@/context/AppContext";
 
 const ACHIEVEMENT_COLORS: Record<string, string> = {
+  // Early
   first_product: Colors.primary,
   first_sale: Colors.green,
+  // Inventory
+  five_products: "#06B6D4",
   ten_products: Colors.purple,
+  fifty_products: "#7C3AED",
+  // Sales volume
+  ten_sales: Colors.green,
+  fifty_sales: "#059669",
   hundred_sales: Colors.amber,
+  thousand_sales: "#DC2626",
+  // Profit
+  profit_500: "#10B981",
   profit_1000: Colors.green,
+  profit_5000: "#F59E0B",
   profit_10000: Colors.amber,
+  profit_50000: "#EF4444",
+  // Efficiency
+  high_margin: "#8B5CF6",
+  well_stocked: "#0EA5E9",
+  // Diversification
+  diverse_catalog: "#F97316",
+  // Bulk
+  bulk_seller: "#6366F1",
+  // Premium
+  premium_seller: "#EC4899",
 };
 
 function LineChart({ data }: { data: { date: string; revenue: number; profit: number }[] }) {

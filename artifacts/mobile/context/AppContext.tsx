@@ -133,9 +133,10 @@ interface AppContextValue {
 }
 
 const ACHIEVEMENTS: Achievement[] = [
+  // Early milestones
   {
     id: "first_product",
-    title: "First Product",
+    title: "First Step",
     description: "Add your first product",
     icon: "package",
     condition: (products) => products.length >= 1,
@@ -147,12 +148,44 @@ const ACHIEVEMENTS: Achievement[] = [
     icon: "shopping-cart",
     condition: (_p, sales) => sales.length >= 1,
   },
+
+  // Inventory milestones
+  {
+    id: "five_products",
+    title: "Starter Pack",
+    description: "Add 5 products",
+    icon: "inbox",
+    condition: (products) => products.length >= 5,
+  },
   {
     id: "ten_products",
     title: "Growing Catalog",
     description: "Add 10 products",
     icon: "layers",
     condition: (products) => products.length >= 10,
+  },
+  {
+    id: "fifty_products",
+    title: "Inventory Master",
+    description: "Add 50 products",
+    icon: "grid",
+    condition: (products) => products.length >= 50,
+  },
+
+  // Sales volume milestones
+  {
+    id: "ten_sales",
+    title: "Getting Started",
+    description: "Record 10 sales",
+    icon: "trending-up",
+    condition: (_p, sales) => sales.length >= 10,
+  },
+  {
+    id: "fifty_sales",
+    title: "Regular Seller",
+    description: "Record 50 sales",
+    icon: "bar-chart-2",
+    condition: (_p, sales) => sales.length >= 50,
   },
   {
     id: "hundred_sales",
@@ -162,20 +195,107 @@ const ACHIEVEMENTS: Achievement[] = [
     condition: (_p, sales) => sales.length >= 100,
   },
   {
+    id: "thousand_sales",
+    title: "Power Seller",
+    description: "Record 1,000 sales",
+    icon: "zap",
+    condition: (_p, sales) => sales.length >= 1000,
+  },
+
+  // Profit milestones (GHS)
+  {
+    id: "profit_500",
+    title: "First Profit",
+    description: "Earn 500 GHS in profit",
+    icon: "dollar-sign",
+    condition: (_p, sales) =>
+      sales.reduce((sum, s) => sum + s.profit, 0) >= 500,
+  },
+  {
     id: "profit_1000",
     title: "Four Figures",
-    description: "Earn 1,000 in profit (GHS)",
+    description: "Earn 1,000 GHS in profit",
     icon: "trending-up",
     condition: (_p, sales) =>
       sales.reduce((sum, s) => sum + s.profit, 0) >= 1000,
   },
   {
+    id: "profit_5000",
+    title: "High Earner",
+    description: "Earn 5,000 GHS in profit",
+    icon: "star",
+    condition: (_p, sales) =>
+      sales.reduce((sum, s) => sum + s.profit, 0) >= 5000,
+  },
+  {
     id: "profit_10000",
     title: "Big Business",
-    description: "Earn 10,000 in profit (GHS)",
-    icon: "zap",
+    description: "Earn 10,000 GHS in profit",
+    icon: "award",
     condition: (_p, sales) =>
       sales.reduce((sum, s) => sum + s.profit, 0) >= 10000,
+  },
+  {
+    id: "profit_50000",
+    title: "Entrepreneur",
+    description: "Earn 50,000 GHS in profit",
+    icon: "briefcase",
+    condition: (_p, sales) =>
+      sales.reduce((sum, s) => sum + s.profit, 0) >= 50000,
+  },
+
+  // Efficiency milestones
+  {
+    id: "high_margin",
+    title: "Savvy Seller",
+    description: "Achieve 50% average profit margin",
+    icon: "percent",
+    condition: (_p, sales) => {
+      if (sales.length === 0) return false;
+      const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
+      const totalRevenue = sales.reduce((sum, s) => sum + s.revenue, 0);
+      return totalRevenue > 0 && (totalProfit / totalRevenue) >= 0.5;
+    },
+  },
+  {
+    id: "well_stocked",
+    title: "Stock Keeper",
+    description: "Maintain 1,000 GHS in stock value",
+    icon: "archive",
+    condition: (products) => {
+      const stockValue = products.reduce((sum, p) => sum + p.costPrice * p.stock, 0);
+      return stockValue >= 1000;
+    },
+  },
+
+  // Diversification milestone
+  {
+    id: "diverse_catalog",
+    title: "Variety Pack",
+    description: "Add products from 5 different categories",
+    icon: "tag",
+    condition: (products) => {
+      const categories = new Set(products.map((p) => p.category));
+      return categories.size >= 5;
+    },
+  },
+
+  // Bulk sale milestone
+  {
+    id: "bulk_seller",
+    title: "Bulk Master",
+    description: "Record a single sale of 50+ items",
+    icon: "truck",
+    condition: (_p, sales) => sales.some((s) => s.quantity >= 50),
+  },
+
+  // Premium milestone
+  {
+    id: "premium_seller",
+    title: "Premium Products",
+    description: "Add a product with 1,000+ GHS selling price",
+    icon: "gift",
+    condition: (products) => products.some((p) => p.sellingPrice >= 1000),
   },
 ];
 
