@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -69,6 +70,18 @@ export interface AuthUser {
   createdAt: number;
 }
 
+export type NotificationType = "sale" | "low_stock" | "achievement" | "info";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  icon: string;
+  read: boolean;
+  createdAt: number;
+}
+
 interface AppContextValue {
   // Auth
   authUser: AuthUser | null;
@@ -107,6 +120,16 @@ interface AppContextValue {
   getLast14Days: () => { date: string; revenue: number; profit: number }[];
   getTopProducts: () => { product: Product; revenue: number; profit: number; soldQty: number }[];
   getLowStockProducts: () => Product[];
+
+  // Notifications
+  notifications: AppNotification[];
+  unreadCount: number;
+  activeToast: AppNotification | null;
+  dismissToast: () => void;
+  markRead: (id: string) => void;
+  markAllRead: () => void;
+  deleteNotification: (id: string) => void;
+  clearAllNotifications: () => void;
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -166,13 +189,15 @@ const STORAGE_KEYS = {
   sales: (userId: string) => `inventoria_sales_${userId}`,
   currency: (userId: string) => `inventoria_currency_${userId}`,
   achievements: (userId: string) => `inventoria_achievements_${userId}`,
+  notifications: (userId: string) => `inventoria_notifications_${userId}`,
 };
+
+const MAX_NOTIFICATIONS = 50;
 
 function genId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
-// Simple deterministic hash for local password storage
 function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -202,21 +227,124 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [unlockedIds, setUnlockedIds] = useState<Record<string, number>>({});
   const [newlyUnlocked, setNewlyUnlocked] = useState<Achievement | null>(null);
 
+  // Notifications
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track low-stock alerts already sent today (per product) to avoid spam
+  const lowStockSentTodayRef = useRef<Set<string>>(new Set());
+
+  // Keep authUser in a ref for callbacks that close over it
+  const authUserRef = useRef<AuthUser | null>(authUser);
+  useEffect(() => { authUserRef.current = authUser; }, [authUser]);
+
+  const saveNotifications = useCallback(
+    (list: AppNotification[], userId?: string) => {
+      const uid = userId ?? authUserRef.current?.id;
+      if (!uid) return;
+      AsyncStorage.setItem(STORAGE_KEYS.notifications(uid), JSON.stringify(list.slice(0, MAX_NOTIFICATIONS)));
+    },
+    []
+  );
+
+  const pushNotification = useCallback(
+    (type: NotificationType, title: string, body: string, icon: string) => {
+      const n: AppNotification = {
+        id: genId(),
+        type,
+        title,
+        body,
+        icon,
+        read: false,
+        createdAt: Date.now(),
+      };
+
+      setNotifications((prev) => {
+        const updated = [n, ...prev].slice(0, MAX_NOTIFICATIONS);
+        saveNotifications(updated);
+        return updated;
+      });
+
+      // Show toast — clear any existing timer
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setActiveToast(n);
+      toastTimerRef.current = setTimeout(() => {
+        setActiveToast(null);
+        toastTimerRef.current = null;
+      }, 4000);
+    },
+    [saveNotifications]
+  );
+
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setActiveToast(null);
+  }, []);
+
+  const markRead = useCallback(
+    (id: string) => {
+      setNotifications((prev) => {
+        const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
+        saveNotifications(updated);
+        return updated;
+      });
+    },
+    [saveNotifications]
+  );
+
+  const markAllRead = useCallback(() => {
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      saveNotifications(updated);
+      return updated;
+    });
+  }, [saveNotifications]);
+
+  const deleteNotification = useCallback(
+    (id: string) => {
+      setNotifications((prev) => {
+        const updated = prev.filter((n) => n.id !== id);
+        saveNotifications(updated);
+        return updated;
+      });
+    },
+    [saveNotifications]
+  );
+
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+    if (authUserRef.current) {
+      AsyncStorage.removeItem(STORAGE_KEYS.notifications(authUserRef.current.id));
+    }
+  }, []);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
   // Load user data when authUser changes
   const loadUserData = useCallback(async (userId: string) => {
     try {
-      const [p, pr, s, c, a] = await Promise.all([
+      const [p, pr, s, c, a, notifs] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.profile(userId)),
         AsyncStorage.getItem(STORAGE_KEYS.products(userId)),
         AsyncStorage.getItem(STORAGE_KEYS.sales(userId)),
         AsyncStorage.getItem(STORAGE_KEYS.currency(userId)),
         AsyncStorage.getItem(STORAGE_KEYS.achievements(userId)),
+        AsyncStorage.getItem(STORAGE_KEYS.notifications(userId)),
       ]);
       setProfileState(p ? JSON.parse(p) : null);
       setProducts(pr ? JSON.parse(pr) : []);
       setSales(s ? JSON.parse(s) : []);
       setCurrencyState((c as Currency) ?? "GHS");
       setUnlockedIds(a ? JSON.parse(a) : {});
+      setNotifications(notifs ? JSON.parse(notifs) : []);
+      lowStockSentTodayRef.current = new Set();
     } catch (e) {
       console.log("Load user data error", e);
     }
@@ -272,6 +400,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSales([]);
     setCurrencyState("GHS");
     setUnlockedIds({});
+    setNotifications([]);
+    lowStockSentTodayRef.current = new Set();
   }, []);
 
   const logIn = useCallback(async (email: string, password: string) => {
@@ -280,12 +410,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const emailLower = email.toLowerCase().trim();
     const found = users.find((u) => u.email === emailLower);
-    if (!found) {
-      throw new Error("No account found with this email");
-    }
-    if (found.passwordHash !== simpleHash(password)) {
-      throw new Error("Incorrect password");
-    }
+    if (!found) throw new Error("No account found with this email");
+    if (found.passwordHash !== simpleHash(password)) throw new Error("Incorrect password");
 
     await AsyncStorage.setItem(STORAGE_KEYS.session, found.id);
     const authUserObj: AuthUser = { id: found.id, email: found.email, name: found.name, createdAt: found.createdAt };
@@ -311,6 +437,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logOut = useCallback(async () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     await AsyncStorage.removeItem(STORAGE_KEYS.session);
     setAuthUser(null);
     setProfileState(null);
@@ -319,6 +446,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCurrencyState("GHS");
     setUnlockedIds({});
     setNewlyUnlocked(null);
+    setNotifications([]);
+    setActiveToast(null);
+    lowStockSentTodayRef.current = new Set();
   }, []);
 
   const checkAchievements = useCallback(
@@ -328,71 +458,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const now = Date.now();
           const newIds = { ...unlockedIds, [ach.id]: now };
           setUnlockedIds(newIds);
-          if (authUser) {
-            AsyncStorage.setItem(STORAGE_KEYS.achievements(authUser.id), JSON.stringify(newIds));
+          if (authUserRef.current) {
+            AsyncStorage.setItem(STORAGE_KEYS.achievements(authUserRef.current.id), JSON.stringify(newIds));
           }
           setNewlyUnlocked({ ...ach, unlockedAt: now });
+          pushNotification("achievement", "Achievement Unlocked!", `You earned "${ach.title}" — ${ach.description}`, "award");
           break;
         }
       }
     },
-    [unlockedIds, authUser]
+    [unlockedIds, pushNotification]
   );
 
   const setProfile = useCallback((p: UserProfile) => {
     setProfileState(p);
-    if (authUser) {
-      AsyncStorage.setItem(STORAGE_KEYS.profile(authUser.id), JSON.stringify(p));
+    if (authUserRef.current) {
+      AsyncStorage.setItem(STORAGE_KEYS.profile(authUserRef.current.id), JSON.stringify(p));
     }
-  }, [authUser]);
+  }, []);
 
   const setCurrency = useCallback((c: Currency) => {
     setCurrencyState(c);
-    if (authUser) {
-      AsyncStorage.setItem(STORAGE_KEYS.currency(authUser.id), c);
+    if (authUserRef.current) {
+      AsyncStorage.setItem(STORAGE_KEYS.currency(authUserRef.current.id), c);
     }
-  }, [authUser]);
+  }, []);
 
   const addProduct = useCallback(
     (data: Omit<Product, "id" | "createdAt">) => {
       const newProduct: Product = { ...data, id: genId(), createdAt: Date.now() };
       const updated = [...products, newProduct];
       setProducts(updated);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.products(authUser.id), JSON.stringify(updated));
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.products(authUserRef.current.id), JSON.stringify(updated));
       }
       checkAchievements(updated, sales);
     },
-    [products, sales, checkAchievements, authUser]
+    [products, sales, checkAchievements]
   );
 
   const updateProduct = useCallback(
     (id: string, updates: Partial<Product>) => {
       const updated = products.map((p) => (p.id === id ? { ...p, ...updates } : p));
       setProducts(updated);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.products(authUser.id), JSON.stringify(updated));
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.products(authUserRef.current.id), JSON.stringify(updated));
       }
     },
-    [products, authUser]
+    [products]
   );
 
   const deleteProduct = useCallback(
     (id: string, deleteSalesHistory = false) => {
       const updatedProducts = products.filter((p) => p.id !== id);
       setProducts(updatedProducts);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.products(authUser.id), JSON.stringify(updatedProducts));
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.products(authUserRef.current.id), JSON.stringify(updatedProducts));
       }
       if (deleteSalesHistory) {
         const updatedSales = sales.filter((s) => s.productId !== id);
         setSales(updatedSales);
-        if (authUser) {
-          AsyncStorage.setItem(STORAGE_KEYS.sales(authUser.id), JSON.stringify(updatedSales));
+        if (authUserRef.current) {
+          AsyncStorage.setItem(STORAGE_KEYS.sales(authUserRef.current.id), JSON.stringify(updatedSales));
         }
       }
     },
-    [products, sales, authUser]
+    [products, sales]
   );
 
   const quickAddStock = useCallback(
@@ -401,11 +532,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         p.id === id ? { ...p, stock: p.stock + qty } : p
       );
       setProducts(updated);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.products(authUser.id), JSON.stringify(updated));
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.products(authUserRef.current.id), JSON.stringify(updated));
       }
     },
-    [products, authUser]
+    [products]
   );
 
   const addSale = useCallback(
@@ -413,42 +544,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const newSale: Sale = { ...data, id: genId(), soldAt: Date.now() };
       const updatedSales = [newSale, ...sales];
       setSales(updatedSales);
+
       const updatedProducts = products.map((p) =>
         p.id === data.productId ? { ...p, stock: Math.max(0, p.stock - data.quantity) } : p
       );
       setProducts(updatedProducts);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.sales(authUser.id), JSON.stringify(updatedSales));
-        AsyncStorage.setItem(STORAGE_KEYS.products(authUser.id), JSON.stringify(updatedProducts));
+
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.sales(authUserRef.current.id), JSON.stringify(updatedSales));
+        AsyncStorage.setItem(STORAGE_KEYS.products(authUserRef.current.id), JSON.stringify(updatedProducts));
       }
+
+      // Notification: sale recorded
+      const sym = CURRENCY_SYMBOLS["GHS"];
+      pushNotification(
+        "sale",
+        "Sale Recorded",
+        `${data.quantity}× ${data.productName} — ${sym}${data.revenue.toFixed(2)} revenue`,
+        "shopping-cart"
+      );
+
+      // Notification: low stock alert (once per product per day)
+      const affected = updatedProducts.find((p) => p.id === data.productId);
+      if (affected && affected.stock <= 5 && !lowStockSentTodayRef.current.has(affected.id)) {
+        lowStockSentTodayRef.current.add(affected.id);
+        const stockLabel = affected.stock === 0 ? "Out of stock!" : `Only ${affected.stock} left`;
+        pushNotification(
+          "low_stock",
+          "Low Stock Alert",
+          `${affected.name}: ${stockLabel} — restock soon`,
+          "alert-triangle"
+        );
+      }
+
       checkAchievements(updatedProducts, updatedSales);
     },
-    [sales, products, checkAchievements, authUser]
+    [sales, products, checkAchievements, pushNotification]
   );
 
   const deleteSale = useCallback(
     (id: string) => {
       const updated = sales.filter((s) => s.id !== id);
       setSales(updated);
-      if (authUser) {
-        AsyncStorage.setItem(STORAGE_KEYS.sales(authUser.id), JSON.stringify(updated));
+      if (authUserRef.current) {
+        AsyncStorage.setItem(STORAGE_KEYS.sales(authUserRef.current.id), JSON.stringify(updated));
       }
     },
-    [sales, authUser]
+    [sales]
   );
 
   const clearAllData = useCallback(async () => {
     setProducts([]);
     setSales([]);
     setUnlockedIds({});
-    if (authUser) {
+    if (authUserRef.current) {
       await Promise.all([
-        AsyncStorage.removeItem(STORAGE_KEYS.products(authUser.id)),
-        AsyncStorage.removeItem(STORAGE_KEYS.sales(authUser.id)),
-        AsyncStorage.removeItem(STORAGE_KEYS.achievements(authUser.id)),
+        AsyncStorage.removeItem(STORAGE_KEYS.products(authUserRef.current.id)),
+        AsyncStorage.removeItem(STORAGE_KEYS.sales(authUserRef.current.id)),
+        AsyncStorage.removeItem(STORAGE_KEYS.achievements(authUserRef.current.id)),
       ]);
     }
-  }, [authUser]);
+  }, []);
 
   const formatCurrency = useCallback(
     (amount: number) => {
@@ -524,6 +680,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addSale, deleteSale, clearAllData, formatCurrency,
       getTodayRevenue, getTodayProfit, getTotalRevenue, getTotalProfit,
       getStockValue, getLast14Days, getTopProducts, getLowStockProducts,
+      notifications, unreadCount, activeToast, dismissToast,
+      markRead, markAllRead, deleteNotification, clearAllNotifications,
     }),
     [
       authUser, isAuthLoaded, signUp, logIn, logOut, findAccountByEmail, resetPassword,
@@ -533,6 +691,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addSale, deleteSale, clearAllData, formatCurrency,
       getTodayRevenue, getTodayProfit, getTotalRevenue, getTotalProfit,
       getStockValue, getLast14Days, getTopProducts, getLowStockProducts,
+      notifications, unreadCount, activeToast, dismissToast,
+      markRead, markAllRead, deleteNotification, clearAllNotifications,
     ]
   );
 

@@ -1,8 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
-  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -86,24 +85,13 @@ export default function DashboardScreen() {
     getLowStockProducts,
     newlyUnlocked,
     clearNewlyUnlocked,
+    unreadCount,
   } = useApp();
-
-  const toastAnim = useRef(new Animated.Value(-120)).current;
-  const toastOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (newlyUnlocked) {
-      Animated.sequence([
-        Animated.parallel([
-          Animated.spring(toastAnim, { toValue: 0, useNativeDriver: true }),
-          Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.delay(2500),
-        Animated.parallel([
-          Animated.spring(toastAnim, { toValue: -120, useNativeDriver: true }),
-          Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-        ]),
-      ]).start(() => clearNewlyUnlocked());
+      const timer = setTimeout(() => clearNewlyUnlocked(), 300);
+      return () => clearTimeout(timer);
     }
   }, [newlyUnlocked]);
 
@@ -120,21 +108,6 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      {newlyUnlocked && (
-        <Animated.View
-          style={[
-            styles.achievementToast,
-            { top: topInset + 12, transform: [{ translateY: toastAnim }], opacity: toastOpacity },
-          ]}
-        >
-          <Feather name="award" size={20} color={Colors.amber} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.toastTitle}>Achievement Unlocked!</Text>
-            <Text style={styles.toastSub}>{newlyUnlocked.title}</Text>
-          </View>
-        </Animated.View>
-      )}
-
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
@@ -147,6 +120,19 @@ export default function DashboardScreen() {
             <Text style={styles.businessName}>{profile?.businessName}</Text>
           </View>
           <View style={styles.headerActions}>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => router.push("/modals/notifications")}
+            >
+              <Feather name="bell" size={20} color={Colors.primary} />
+              {unreadCount > 0 && (
+                <View style={styles.badgeDot}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
             <Pressable
               style={styles.headerBtn}
               onPress={() => router.push("/modals/settings")}
@@ -305,6 +291,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+  },
+  badgeDot: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: Colors.white,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    color: Colors.white,
+    lineHeight: 12,
   },
   statsGrid: {
     flexDirection: "row",
@@ -547,33 +554,6 @@ const styles = StyleSheet.create({
   onboardBtnText: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.white,
-  },
-  achievementToast: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    zIndex: 100,
-    backgroundColor: Colors.black,
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  toastTitle: {
-    fontSize: 11,
-    color: Colors.gray[400],
-    fontFamily: "Inter_400Regular",
-  },
-  toastSub: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
     color: Colors.white,
   },
 });

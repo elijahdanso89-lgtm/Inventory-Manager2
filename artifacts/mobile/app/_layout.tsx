@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import NotificationToast from "@/components/NotificationToast";
 import { Colors } from "@/constants/colors";
 import { AppProvider, useApp } from "@/context/AppContext";
 
@@ -64,36 +65,43 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
-      <Stack.Screen name="auth" options={{ animation: "none" }} />
-      <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="welcome" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen
-        name="modals/add-product"
-        options={{ presentation: "modal" }}
-      />
-      <Stack.Screen
-        name="modals/edit-product"
-        options={{ presentation: "modal" }}
-      />
-      <Stack.Screen
-        name="modals/record-sale"
-        options={{ presentation: "modal" }}
-      />
-      <Stack.Screen
-        name="modals/quick-add"
-        options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.5],
-          sheetGrabberVisible: true,
-        }}
-      />
-      <Stack.Screen
-        name="modals/settings"
-        options={{ presentation: "modal" }}
-      />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
+        <Stack.Screen name="auth" options={{ animation: "none" }} />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="modals/add-product"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="modals/edit-product"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="modals/record-sale"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="modals/quick-add"
+          options={{
+            presentation: "formSheet",
+            sheetAllowedDetents: [0.5],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen
+          name="modals/settings"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="modals/notifications"
+          options={{ presentation: "modal" }}
+        />
+      </Stack>
+      <NotificationToast />
+    </>
   );
 }
 
