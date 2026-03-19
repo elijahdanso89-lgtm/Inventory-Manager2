@@ -1,0 +1,37 @@
+name: Build Inventoria APK
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install root dependencies
+        run: pnpm install
+
+      - name: Navigate to mobile app
+        run: cd artifacts/mobile && pwd && ls -la
+
+      - name: Install EAS CLI locally
+        run: cd artifacts/mobile && pnpm add -D eas-cli
+
+      - name: Build APK with EAS
+        run: cd artifacts/mobile && npx eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EX
